@@ -14,43 +14,71 @@ import (
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 var (
-	purple     = lipgloss.Color("#9B59B6")
-	pink       = lipgloss.Color("#FF6EB4")
-	green      = lipgloss.Color("#2ECC71")
-	yellow     = lipgloss.Color("#F1C40F")
-	cyan       = lipgloss.Color("#00FFFF")
-	orange     = lipgloss.Color("#E67E22")
-	white      = lipgloss.Color("#FFFFFF")
-	darkGray   = lipgloss.Color("#2D2D2D")
-	mutedGray  = lipgloss.Color("#888888")
+	purple   = lipgloss.Color("#9B59B6")
+	pink     = lipgloss.Color("#FF6EB4")
+	green    = lipgloss.Color("#2ECC71")
+	yellow   = lipgloss.Color("#F1C40F")
+	cyan     = lipgloss.Color("#00FFFF")
+	orange   = lipgloss.Color("#E67E22")
+	white    = lipgloss.Color("#FFFFFF")
+	darkGray = lipgloss.Color("#1A1A2E")
+	mutedGray = lipgloss.Color("#888888")
 
 	titleStyle = lipgloss.NewStyle().
 			Bold(true).
 			Foreground(pink).
 			Border(lipgloss.DoubleBorder()).
 			BorderForeground(purple).
-			Padding(0, 4).
+			Padding(0, 6).
 			Align(lipgloss.Center)
 
 	subtitleStyle = lipgloss.NewStyle().
 			Foreground(mutedGray).
-			Italic(true)
+			Italic(true).
+			Align(lipgloss.Center)
 
 	labelStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(cyan)
+			Foreground(cyan).
+			Align(lipgloss.Center)
 
 	inputBoxStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(purple).
 			Padding(0, 2).
-			Width(44)
+			Width(44).
+			Align(lipgloss.Center)
 
 	resultBoxStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(green).
-			Padding(0, 2).
-			Width(44)
+			Padding(1, 4).
+			Width(50).
+			Align(lipgloss.Center)
+
+	doneStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(green).
+			Border(lipgloss.DoubleBorder()).
+			BorderForeground(green).
+			Padding(0, 6).
+			Align(lipgloss.Center)
+
+	summaryHeaderStyle = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(pink).
+				Underline(true).
+				Align(lipgloss.Center)
+
+	counterStyle = lipgloss.NewStyle().
+			Foreground(purple).
+			Bold(true).
+			Align(lipgloss.Center)
+
+	helpStyle = lipgloss.NewStyle().
+			Foreground(mutedGray).
+			Italic(true).
+			Align(lipgloss.Center)
 
 	typeColors = map[string]lipgloss.Color{
 		"int":     cyan,
@@ -58,28 +86,6 @@ var (
 		"bool":    orange,
 		"string":  green,
 	}
-
-	helpStyle = lipgloss.NewStyle().Foreground(mutedGray).Italic(true)
-
-	counterStyle = lipgloss.NewStyle().
-			Foreground(purple).
-			Bold(true)
-
-	doneStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(green).
-			Border(lipgloss.DoubleBorder()).
-			BorderForeground(green).
-			Padding(0, 4).
-			Align(lipgloss.Center)
-
-	summaryHeaderStyle = lipgloss.NewStyle().
-				Bold(true).
-				Foreground(pink).
-				Underline(true)
-
-	summaryRowStyle = lipgloss.NewStyle().
-			Foreground(white)
 )
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -104,6 +110,7 @@ type model struct {
 	current   int
 	results   []result
 	err       string
+	width     int
 }
 
 // ── Type Detection ────────────────────────────────────────────────────────────
@@ -125,7 +132,7 @@ func detectType(s string) string {
 
 func initialModel() model {
 	ti := textinput.New()
-	ti.Placeholder = "e.g 1 , 5 , etc"
+	ti.Placeholder = "e.g. 42, 3.14, true, hello"
 	ti.Focus()
 	ti.CharLimit = 64
 	ti.Width = 40
@@ -148,6 +155,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+
 	case tea.KeyMsg:
 		switch msg.Type {
 		case tea.KeyCtrlC, tea.KeyEsc:
@@ -198,75 +208,84 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+// ── Center helper ─────────────────────────────────────────────────────────────
+
+func (m model) center(s string) string {
+	if m.width == 0 {
+		return lipgloss.PlaceHorizontal(100, lipgloss.Center, s)
+	}
+	return lipgloss.PlaceHorizontal(m.width, lipgloss.Center, s)
+}
+
 // ── View ──────────────────────────────────────────────────────────────────────
 
 func (m model) View() string {
 	var b strings.Builder
 
-	// Title
-	b.WriteString("\n")
-	b.WriteString(lipgloss.PlaceHorizontal(50, lipgloss.Center, titleStyle.Render("⚡ GO TYPE DETECTOR")))
-	b.WriteString("\n")
-	
+	b.WriteString("\n\n")
+	b.WriteString(m.center(titleStyle.Render("⚡ GO TYPE DETECTOR")))
 	b.WriteString("\n\n")
 
 	switch m.phase {
 
 	case phaseAskCount:
-		b.WriteString(labelStyle.Render("  How many inputs do you want to test?"))
+		b.WriteString(m.center(labelStyle.Render("How many inputs do you want to test?")))
 		b.WriteString("\n\n")
-		b.WriteString(inputBoxStyle.Render(m.textInput.View()))
+		b.WriteString(m.center(inputBoxStyle.Render(m.textInput.View())))
 		b.WriteString("\n\n")
 		if m.err != "" {
-			b.WriteString("  " + lipgloss.NewStyle().Foreground(lipgloss.Color("#FF4444")).Render(m.err))
-			b.WriteString("\n")
+			errStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#FF4444")).Align(lipgloss.Center)
+			b.WriteString(m.center(errStyle.Render(m.err)))
+			b.WriteString("\n\n")
 		}
-		b.WriteString("  " + helpStyle.Render("press Enter to confirm • ctrl+c to quit"))
+		b.WriteString(m.center(helpStyle.Render("enter to confirm  •  ctrl+c to quit")))
 
 	case phaseTyping:
-		progress := fmt.Sprintf("  Input %d of %d", m.current, m.count)
-		b.WriteString(counterStyle.Render(progress))
+		counter := fmt.Sprintf("Input %d of %d", m.current, m.count)
+		b.WriteString(m.center(counterStyle.Render(counter)))
 		b.WriteString("\n\n")
-
-		// Previous results
-		for _, r := range m.results {
-			col, ok := typeColors[r.typeName]
-			if !ok {
-				col = white
-			}
-			typeTag := lipgloss.NewStyle().
-				Bold(true).
-				Foreground(darkGray).
-				Background(col).
-				Padding(0, 1).
-				Render(r.typeName)
-
-			line := fmt.Sprintf("  %-20s  %s", r.input, typeTag)
-			b.WriteString(summaryRowStyle.Render(line))
-			b.WriteString("\n")
-		}
 
 		if len(m.results) > 0 {
-			b.WriteString("\n")
+			var rows strings.Builder
+			for _, r := range m.results {
+				col, ok := typeColors[r.typeName]
+				if !ok {
+					col = white
+				}
+				typeTag := lipgloss.NewStyle().
+					Bold(true).
+					Foreground(darkGray).
+					Background(col).
+					Padding(0, 1).
+					Render(r.typeName)
+
+				row := fmt.Sprintf("%-22s  %s", r.input, typeTag)
+				rows.WriteString(lipgloss.NewStyle().Foreground(white).Render(row))
+				rows.WriteString("\n")
+			}
+			b.WriteString(m.center(resultBoxStyle.Render(rows.String())))
+			b.WriteString("\n\n")
 		}
 
-		b.WriteString(labelStyle.Render("  Enter something:"))
+		b.WriteString(m.center(labelStyle.Render("Enter something:")))
 		b.WriteString("\n\n")
-		b.WriteString(inputBoxStyle.Render(m.textInput.View()))
+		b.WriteString(m.center(inputBoxStyle.Render(m.textInput.View())))
 		b.WriteString("\n\n")
 
 		if m.err != "" {
-			b.WriteString("  " + lipgloss.NewStyle().Foreground(lipgloss.Color("#FF4444")).Render(m.err))
-			b.WriteString("\n")
+			errStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#FF4444"))
+			b.WriteString(m.center(errStyle.Render(m.err)))
+			b.WriteString("\n\n")
 		}
-		b.WriteString("  " + helpStyle.Render("press Enter to submit • ctrl+c to quit"))
+		b.WriteString(m.center(helpStyle.Render("enter to submit  •  ctrl+c to quit")))
 
 	case phaseDone:
-		b.WriteString(lipgloss.PlaceHorizontal(50, lipgloss.Center, doneStyle.Render("✅  All done!")))
+		b.WriteString(m.center(doneStyle.Render("✅  All done!")))
 		b.WriteString("\n\n")
-		b.WriteString("  " + summaryHeaderStyle.Render("Results Summary"))
+		b.WriteString(m.center(summaryHeaderStyle.Render("── Results Summary ──")))
 		b.WriteString("\n\n")
 
+		var rows strings.Builder
 		for i, r := range m.results {
 			col, ok := typeColors[r.typeName]
 			if !ok {
@@ -280,12 +299,13 @@ func (m model) View() string {
 				Render(r.typeName)
 
 			num := lipgloss.NewStyle().Foreground(mutedGray).Render(fmt.Sprintf("%2d.", i+1))
-			line := fmt.Sprintf("  %s  %-20s  %s", num, r.input, typeTag)
-			b.WriteString(line)
-			b.WriteString("\n")
+			row := fmt.Sprintf("%s  %-22s  %s", num, r.input, typeTag)
+			rows.WriteString(lipgloss.NewStyle().Foreground(white).Render(row))
+			rows.WriteString("\n")
 		}
-
-		b.WriteString("\n  " + helpStyle.Render("press ctrl+c to exit"))
+		b.WriteString(m.center(resultBoxStyle.Render(rows.String())))
+		b.WriteString("\n\n")
+		b.WriteString(m.center(helpStyle.Render("ctrl+c to exit")))
 	}
 
 	b.WriteString("\n\n")
@@ -301,6 +321,7 @@ func main() {
 		os.Exit(1)
 	}
 }
+
 
 
 
