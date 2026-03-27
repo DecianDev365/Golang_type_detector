@@ -1,8 +1,8 @@
-echo "*.exe
+"*.exe
 *.out
 *.test
 .DS_Store
-vendor/" > .gitignore
+vendor/"
 
 
 
