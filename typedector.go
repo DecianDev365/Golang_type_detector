@@ -11,17 +11,17 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// ── Styles ────────────────────────────────────────────────────────────────────
+// ── Colors ────────────────────────────────────────────────────────────────────
 
 var (
-	purple   = lipgloss.Color("#9B59B6")
-	pink     = lipgloss.Color("#FF6EB4")
-	green    = lipgloss.Color("#2ECC71")
-	yellow   = lipgloss.Color("#F1C40F")
-	cyan     = lipgloss.Color("#00FFFF")
-	orange   = lipgloss.Color("#E67E22")
-	white    = lipgloss.Color("#FFFFFF")
-	darkGray = lipgloss.Color("#1A1A2E")
+	purple    = lipgloss.Color("#9B59B6")
+	pink      = lipgloss.Color("#FF6EB4")
+	green     = lipgloss.Color("#2ECC71")
+	yellow    = lipgloss.Color("#F1C40F")
+	cyan      = lipgloss.Color("#00FFFF")
+	orange    = lipgloss.Color("#E67E22")
+	white     = lipgloss.Color("#FFFFFF")
+	darkGray  = lipgloss.Color("#1A1A2E")
 	mutedGray = lipgloss.Color("#888888")
 
 	titleStyle = lipgloss.NewStyle().
@@ -32,53 +32,51 @@ var (
 			Padding(0, 6).
 			Align(lipgloss.Center)
 
-	subtitleStyle = lipgloss.NewStyle().
-			Foreground(mutedGray).
-			Italic(true).
-			Align(lipgloss.Center)
-
 	labelStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(cyan).
-			Align(lipgloss.Center)
+			Foreground(cyan)
 
 	inputBoxStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(purple).
 			Padding(0, 2).
-			Width(44).
-			Align(lipgloss.Center)
+			Width(44)
 
 	resultBoxStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
+				Border(lipgloss.RoundedBorder()).
 			BorderForeground(green).
 			Padding(1, 4).
-			Width(50).
-			Align(lipgloss.Center)
+			Width(50)
 
 	doneStyle = lipgloss.NewStyle().
 			Bold(true).
 			Foreground(green).
 			Border(lipgloss.DoubleBorder()).
 			BorderForeground(green).
-			Padding(0, 6).
-			Align(lipgloss.Center)
+			Padding(0, 6)
 
 	summaryHeaderStyle = lipgloss.NewStyle().
 				Bold(true).
 				Foreground(pink).
-				Underline(true).
-				Align(lipgloss.Center)
+				Underline(true)
 
 	counterStyle = lipgloss.NewStyle().
 			Foreground(purple).
-			Bold(true).
-			Align(lipgloss.Center)
+			Bold(true)
 
 	helpStyle = lipgloss.NewStyle().
 			Foreground(mutedGray).
-			Italic(true).
-			Align(lipgloss.Center)
+			Italic(true)
+
+	selectedStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(darkGray).
+			Background(pink).
+			Padding(0, 2)
+
+	unselectedStyle = lipgloss.NewStyle().
+			Foreground(white).
+			Padding(0, 2)
 
 	typeColors = map[string]lipgloss.Color{
 		"int":     cyan,
@@ -88,12 +86,13 @@ var (
 	}
 )
 
-// ── State ─────────────────────────────────────────────────────────────────────
+// ── Phases ────────────────────────────────────────────────────────────────────
 
 type phase int
 
 const (
-	phaseAskCount phase = iota
+	phaseMenu phase = iota
+	phaseAskCount
 	phaseTyping
 	phaseDone
 )
@@ -104,13 +103,16 @@ type result struct {
 }
 
 type model struct {
-	phase     phase
-	textInput textinput.Model
-	count     int
-	current   int
-	results   []result
-	err       string
-	width     int
+	phase      phase
+	textInput  textinput.Model
+	count      int
+	current    int
+	results    []result
+	err        string
+	width      int
+	height     int
+	menuCursor int
+	endless    bool
 }
 
 // ── Type Detection ────────────────────────────────────────────────────────────
@@ -140,7 +142,7 @@ func initialModel() model {
 	ti.TextStyle = lipgloss.NewStyle().Foreground(white)
 
 	return model{
-		phase:     phaseAskCount,
+		phase:     phaseMenu,
 		textInput: ti,
 	}
 }
@@ -157,16 +159,44 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
+		m.height = msg.Height
 
 	case tea.KeyMsg:
 		switch msg.Type {
-		case tea.KeyCtrlC, tea.KeyEsc:
+		case tea.KeyCtrlC:
 			return m, tea.Quit
 
-		case tea.KeyEnter:
-			val := strings.TrimSpace(m.textInput.Value())
+		case tea.KeyUp, tea.KeyLeft:
+			if m.phase == phaseMenu {
+				m.menuCursor = 0
+			}
 
-			if m.phase == phaseAskCount {
+		case tea.KeyDown, tea.KeyRight:
+			if m.phase == phaseMenu {
+				m.menuCursor = 1
+			}
+
+		case tea.KeyEnter:
+			switch m.phase {
+
+			case phaseMenu:
+				if m.menuCursor == 0 {
+					m.endless = true
+					m.phase = phaseTyping
+					m.current = 1
+					m.results = []result{}
+					m.textInput.SetValue("")
+					m.textInput.Placeholder = "type anything..."
+				} else {
+					m.endless = false
+					m.phase = phaseAskCount
+					m.textInput.SetValue("")
+					m.textInput.Placeholder = "enter a number..."
+					m.textInput.Focus()
+				}
+
+			case phaseAskCount:
+				val := strings.TrimSpace(m.textInput.Value())
 				n, err := strconv.Atoi(val)
 				if err != nil || n <= 0 {
 					m.err = "⚠  Please enter a valid positive number"
@@ -180,26 +210,29 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.phase = phaseTyping
 				m.textInput.Placeholder = "type anything..."
 				m.textInput.SetValue("")
-				return m, nil
-			}
 
-			if m.phase == phaseTyping {
+			case phaseTyping:
+				val := strings.TrimSpace(m.textInput.Value())
 				if val == "" {
 					m.err = "⚠  Input cannot be empty"
+					return m, nil
+				}
+				if val == "q" || val == "quit" {
+					m.phase = phaseDone
+					m.textInput.Blur()
 					return m, nil
 				}
 				m.err = ""
 				t := detectType(val)
 				m.results = append(m.results, result{input: val, typeName: t})
 
-				if m.current >= m.count {
+				if !m.endless && m.current >= m.count {
 					m.phase = phaseDone
 					m.textInput.Blur()
 					return m, nil
 				}
 				m.current++
 				m.textInput.SetValue("")
-				return m, nil
 			}
 		}
 	}
@@ -208,111 +241,155 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-// ── Center helper ─────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 func (m model) center(s string) string {
-	if m.width == 0 {
-		return lipgloss.PlaceHorizontal(100, lipgloss.Center, s)
+	w := m.width
+	if w == 0 {
+		w = 100
 	}
-	return lipgloss.PlaceHorizontal(m.width, lipgloss.Center, s)
+	return lipgloss.PlaceHorizontal(w, lipgloss.Center, s)
 }
+
+func (m model) vcenter(s string) string {
+	h := m.height
+	if h == 0 {
+		h = 40
+	}
+	contentHeight := strings.Count(s, "\n") + 1
+	_ = contentHeight
+	return lipgloss.PlaceVertical(h, lipgloss.Center, lipgloss.PlaceHorizontal(m.width, lipgloss.Center, s))
+ }
+ 
 
 // ── View ──────────────────────────────────────────────────────────────────────
 
 func (m model) View() string {
-	var b strings.Builder
+	
 
-	b.WriteString("\n\n")
-	b.WriteString(m.center(titleStyle.Render("⚡ GO TYPE DETECTOR")))
-	b.WriteString("\n\n")
+	title := titleStyle.Render("⚡ GO TYPE DETECTOR")
 
 	switch m.phase {
 
-	case phaseAskCount:
-		b.WriteString(m.center(labelStyle.Render("How many inputs do you want to test?")))
-		b.WriteString("\n\n")
-		b.WriteString(m.center(inputBoxStyle.Render(m.textInput.View())))
-		b.WriteString("\n\n")
-		if m.err != "" {
-			errStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#FF4444")).Align(lipgloss.Center)
-			b.WriteString(m.center(errStyle.Render(m.err)))
-			b.WriteString("\n\n")
+	case phaseMenu:
+		opt1 := unselectedStyle.Render("  Endless Mode  ")
+		opt2 := unselectedStyle.Render("  Set Number    ")
+		if m.menuCursor == 0 {
+			opt1 = selectedStyle.Render("  Endless Mode  ")
+		} else {
+			opt2 = selectedStyle.Render("  Set Number    ")
 		}
-		b.WriteString(m.center(helpStyle.Render("enter to confirm  •  ctrl+c to quit")))
+
+		menu := lipgloss.JoinVertical(lipgloss.Center,
+			title,
+			"",
+			labelStyle.Render("Choose a mode:"),
+			"",
+			opt1,
+			"",
+			opt2,
+			"",
+			helpStyle.Render("↑ ↓ to navigate  •  enter to select  •  ctrl+c to quit"),
+		)
+		return m.vcenter(menu)
+
+	case phaseAskCount:
+		block := lipgloss.JoinVertical(lipgloss.Center,
+			title,
+			"",
+			labelStyle.Render("How many inputs do you want to test?"),
+			"",
+			inputBoxStyle.Render(m.textInput.View()),
+			"",
+			func() string {
+				if m.err != "" {
+					return lipgloss.NewStyle().Foreground(lipgloss.Color("#FF4444")).Render(m.err)
+				}
+				return helpStyle.Render("enter to confirm  •  ctrl+c to quit")
+			}(),
+		)
+		return m.vcenter(block)
 
 	case phaseTyping:
-		counter := fmt.Sprintf("Input %d of %d", m.current, m.count)
-		b.WriteString(m.center(counterStyle.Render(counter)))
-		b.WriteString("\n\n")
+		var counter string
+		if m.endless {
+			counter = counterStyle.Render(fmt.Sprintf("Input #%d  —  type 'q' to finish", m.current))
+		} else {
+			counter = counterStyle.Render(fmt.Sprintf("Input %d of %d", m.current, m.count))
+		}
+
+		parts := []string{title, "", counter, ""}
 
 		if len(m.results) > 0 {
 			var rows strings.Builder
 			for _, r := range m.results {
-				col, ok := typeColors[r.typeName]
-				if !ok {
-					col = white
-				}
+				col := typeColors[r.typeName]
 				typeTag := lipgloss.NewStyle().
 					Bold(true).
 					Foreground(darkGray).
 					Background(col).
 					Padding(0, 1).
 					Render(r.typeName)
-
 				row := fmt.Sprintf("%-22s  %s", r.input, typeTag)
 				rows.WriteString(lipgloss.NewStyle().Foreground(white).Render(row))
 				rows.WriteString("\n")
 			}
-			b.WriteString(m.center(resultBoxStyle.Render(rows.String())))
-			b.WriteString("\n\n")
+			parts = append(parts, resultBoxStyle.Render(rows.String()), "")
 		}
 
-		b.WriteString(m.center(labelStyle.Render("Enter something:")))
-		b.WriteString("\n\n")
-		b.WriteString(m.center(inputBoxStyle.Render(m.textInput.View())))
-		b.WriteString("\n\n")
+		parts = append(parts, labelStyle.Render("Enter something:"), "")
+		parts = append(parts, inputBoxStyle.Render(m.textInput.View()), "")
 
 		if m.err != "" {
-			errStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#FF4444"))
-			b.WriteString(m.center(errStyle.Render(m.err)))
-			b.WriteString("\n\n")
+			parts = append(parts, lipgloss.NewStyle().Foreground(lipgloss.Color("#FF4444")).Render(m.err), "")
+		} else {
+			if m.endless {
+				parts = append(parts, helpStyle.Render("enter to submit  •  type 'q' to finish  •  ctrl+c to quit"))
+			} else {
+				parts = append(parts, helpStyle.Render("enter to submit  •  ctrl+c to quit"))
+			}
 		}
-		b.WriteString(m.center(helpStyle.Render("enter to submit  •  ctrl+c to quit")))
 
+		block := lipgloss.JoinVertical(lipgloss.Center, parts...)
+		return m.vcenter(block)
+	
+	
 	case phaseDone:
-		b.WriteString(m.center(doneStyle.Render("✅  All done!")))
-		b.WriteString("\n\n")
-		b.WriteString(m.center(summaryHeaderStyle.Render("── Results Summary ──")))
-		b.WriteString("\n\n")
-
 		var rows strings.Builder
 		for i, r := range m.results {
-			col, ok := typeColors[r.typeName]
-			if !ok {
-				col = white
-			}
+			col := typeColors[r.typeName]
 			typeTag := lipgloss.NewStyle().
 				Bold(true).
 				Foreground(darkGray).
 				Background(col).
 				Padding(0, 1).
 				Render(r.typeName)
-
 			num := lipgloss.NewStyle().Foreground(mutedGray).Render(fmt.Sprintf("%2d.", i+1))
 			row := fmt.Sprintf("%s  %-22s  %s", num, r.input, typeTag)
 			rows.WriteString(lipgloss.NewStyle().Foreground(white).Render(row))
 			rows.WriteString("\n")
 		}
-		b.WriteString(m.center(resultBoxStyle.Render(rows.String())))
-		b.WriteString("\n\n")
-		b.WriteString(m.center(helpStyle.Render("ctrl+c to exit")))
+
+		block := lipgloss.JoinVertical(lipgloss.Center,
+			doneStyle.Render("✅  All done!"),
+			"",
+			summaryHeaderStyle.Render("── Results Summary ──"),
+			"",
+			resultBoxStyle.Render(rows.String()),
+			"",
+			helpStyle.Render("ctrl+c to exit"),
+		)
+		return m.vcenter(block)
 	}
 
-	b.WriteString("\n\n")
-	return b.String()
+	
+  return ""
 }
 
-// ── Main ──────────────────────────────────────────────────────────────────────
+
+
+
+		// ── Main ──────────────────────────────────────────────────────────────────────
 
 func main() {
 	p := tea.NewProgram(initialModel(), tea.WithAltScreen())
@@ -321,7 +398,6 @@ func main() {
 		os.Exit(1)
 	}
 }
-
 
 
 
