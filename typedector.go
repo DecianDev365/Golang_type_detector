@@ -29,8 +29,9 @@ var (
 			Foreground(pink).
 			Border(lipgloss.DoubleBorder()).
 			BorderForeground(purple).
-			Padding(0, 6).
+			Padding(0,6).
 			Align(lipgloss.Center)
+			
 
 	labelStyle = lipgloss.NewStyle().
 			Bold(true).
@@ -134,7 +135,7 @@ func detectType(s string) string {
 
 func initialModel() model {
 	ti := textinput.New()
-	ti.Placeholder = "e.g. 42, 3.14, true, hello"
+	ti.Placeholder = "e.g. 1,3,67"
 	ti.Focus()
 	ti.CharLimit = 64
 	ti.Width = 40
@@ -217,11 +218,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.err = "⚠  Input cannot be empty"
 					return m, nil
 				}
-				if val == "q" || val == "quit" {
-					m.phase = phaseDone
-					m.textInput.Blur()
-					return m, nil
-				}
+
 				m.err = ""
 				t := detectType(val)
 				m.results = append(m.results, result{input: val, typeName: t})
@@ -313,7 +310,7 @@ func (m model) View() string {
 	case phaseTyping:
 		var counter string
 		if m.endless {
-			counter = counterStyle.Render(fmt.Sprintf("Input #%d  —  type 'q' to finish", m.current))
+			counter = counterStyle.Render(fmt.Sprintf("Input #%d", m.current))
 		} else {
 			counter = counterStyle.Render(fmt.Sprintf("Input %d of %d", m.current, m.count))
 		}
@@ -344,7 +341,7 @@ func (m model) View() string {
 			parts = append(parts, lipgloss.NewStyle().Foreground(lipgloss.Color("#FF4444")).Render(m.err), "")
 		} else {
 			if m.endless {
-				parts = append(parts, helpStyle.Render("enter to submit  •  type 'q' to finish  •  ctrl+c to quit"))
+				parts = append(parts, helpStyle.Render("enter to submit  •  ctrl+c to quit"))
 			} else {
 				parts = append(parts, helpStyle.Render("enter to submit  •  ctrl+c to quit"))
 			}
